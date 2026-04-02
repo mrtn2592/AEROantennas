@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Aero Antenna 3D Gain Pattern Comparator</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+        .header { margin-bottom: 20px; }
+        .header h1 { margin: 0; font-size: 24px; color: #fff; }
+        .container { display: flex; flex: 1; gap: 20px; min-height: 0; }
+        .controls {
+            flex: 0 0 380px;
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-y: auto;
+        }
+        .plot-area {
+            flex: 1;
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 10px;
+            position: relative;
+        }
+        #plot { width: 100%; height: 100%; }
+        .antenna-config {
+            border: 1px solid #333;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            background: #252525;
+        }
+        h3 { margin-top: 0; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 5px; color: #007acc; }
+        #config2 h3 { color: #cc3300; }
+        .input-group { margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        label { font-size: 13px; color: #aaa; }
+        input, select {
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 5px;
+            border-radius: 4px;
+            width: 150px;
+            font-size: 13px;
+        }
+        input:disabled { background: #222; color: #666; cursor: not-allowed; }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        button:hover { background: #45a049; }
+        .metrics { font-size: 12px; color: #fff; margin-top: 10px; font-family: monospace; line-height: 1.4; background: #111; padding: 8px; border-radius: 4px;}
+        select option[title] { background: #444; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Phased Array & VICTS 3D Radiation Pattern</h1>
+</div>
+
+<div class="container">
+    <div class="controls">
+        <div class="antenna-config" id="config1">
+            <h3>Antenna 1 (Primary - Blue)</h3>
+            <div class="input-group">
+                <label>Preset :</label>
+                <select id="preset1" onchange="applyPreset(1)">
+                    <option value="custom">Custom</option>
+                    <option value="starlink" title="Source : Dossier FCC (UT3-V1) - Gain mesuré à 36.4 dBi @ 14.25 GHz">Starlink Aviation (ESA Ku)</option>
+                    <option value="sidewinder" title="Source : FCC STA Exhibit (SBS) - Gain matériel 34.1 dBi @ 14.25 GHz">Stellar Blu Sidewinder (ESA Ku)</option>
+                    <option value="ka2517" title="Source : Dossier FCC (Thales/SES) - Gain déduit de 35.0 dBi @ 27-31 GHz (PIRE - Plin)">ThinKom Ka2517 (VICTS Ka)</option>
+                </select>
+            </div>
+            <div class="input-group"><label>Max Gain (dBi) :</label><input type="number" id="gain1" step="0.1" value="32.0"></div>
+            <div class="input-group"><label>Width (m) :</label><input type="number" id="w1" step="0.01" value="0.45"></div>
+            <div class="input-group"><label>Length (m) :</label><input type="number" id="l1" step="0.01" value="0.45"></div>
+            <div class="input-group"><label>Freq (GHz) :</label><input type="number" id="freq1" step="0.1" value="14.2"></div>
+            <div class="input-group"><label>Azimuth (&deg;) :</label><input type="number" id="az1" value="0"></div>
+            <div class="input-group"><label>Elevation (&deg;) :</label><input type="number" id="el1" value="60"></div>
+            <div class="input-group">
+                <label>Type :</label>
+                <select id="type1">
+                    <option value="esa">ESA (Scan Loss applied)</option>
+                    <option value="victs">VICTS (No Cos&theta; Loss)</option>
+                </select>
+            </div>
+            <div id="metrics1" class="metrics"></div>
+        </div>
+
+        <div class="antenna-config" id="config2">
+            <h3>Antenna 2 (Comparison - Red)</h3>
+            <div class="input-group">
+                <label>Enable :</label>
+                <select id="enable2" onchange="toggleAntenna2()">
+                    <option value="false">Off</option>
+                    <option value="true">On</option>
+                </select>
+            </div>
+            <div id="controls2" style="display:none; margin-top: 10px;">
+                <div class="input-group">
+                    <label>Preset :</label>
+                    <select id="preset2" onchange="applyPreset(2)">
+                        <option value="custom">Custom</option>
+                        <option value="starlink" title="Source : Dossier FCC (UT3-V1) - Gain mesuré à 36.4 dBi @ 14.25 GHz">Starlink Aviation (ESA Ku)</option>
+                        <option value="sidewinder" title="Source : FCC STA Exhibit (SBS) - Gain matériel 34.1 dBi @ 14.25 GHz">Stellar Blu Sidewinder (ESA Ku)</option>
+                        <option value="ka2517" title="Source : Dossier FCC (Thales/SES) - Gain déduit de 35.0 dBi @ 27-31 GHz (PIRE - Plin)">ThinKom Ka2517 (VICTS Ka)</option>
+                    </select>
+                </div>
+                <div class="input-group"><label>Max Gain (dBi) :</label><input type="number" id="gain2" step="0.1" value="38.0"></div>
+                <div class="input-group"><label>Width (m) :</label><input type="number" id="w2" step="0.01" value="0.64"></div>
+                <div class="input-group"><label>Length (m) :</label><input type="number" id="l2" step="0.01" value="0.43"></div>
+                <div class="input-group"><label>Freq (GHz) :</label><input type="number" id="freq2" step="0.1" value="29.5"></div>
+                <div class="input-group"><label>Azimuth (&deg;) :</label><input type="number" id="az2" value="0"></div>
+                <div class="input-group"><label>Elevation (&deg;) :</label><input type="number" id="el2" value="60"></div>
+                <div class="input-group">
+                    <label>Type :</label>
+                    <select id="type2">
+                        <option value="esa">ESA (Scan Loss applied)</option>
+                        <option value="victs" selected>VICTS (No Cos&theta; Loss)</option>
+                    </select>
+                </div>
+                <div id="metrics2" class="metrics"></div>
+            </div>
+        </div>
+        <button onclick="updatePlot()">Render 3D Pattern</button>
+    </div>
+    <div class="plot-area">
+        <div id="plot"></div>
+    </div>
+</div>
+
+<script>
+const presets = {
+    'starlink': { w: 0.57, l: 0.37, freq: 14.25, type: 'esa', gain: 36.4 },
+    'sidewinder': { w: 0.47, l: 0.47, freq: 14.25, type: 'esa', gain: 34.1 },
+    'ka2517': { w: 0.64, l: 0.43, freq: 29.5, type: 'victs', gain: 35.0 }
+};
+
+function calculateTheoreticalGain(w, l, freq) {
+    const lambda = 0.29979 / freq;
+    const maxGainLinear = 0.6 * (4 * Math.PI * w * l) / (lambda * lambda);
+    return 10 * Math.log10(maxGainLinear);
+}
+
+function applyPreset(id) {
+    const presetVal = document.getElementById(`preset${id}`).value;
+    const gainInput = document.getElementById(`gain${id}`);
+    
+    if (presetVal === 'custom') {
+        gainInput.disabled = false;
+        return;
+    }
+    
+    const data = presets[presetVal];
+    document.getElementById(`w${id}`).value = data.w;
+    document.getElementById(`l${id}`).value = data.l;
+    document.getElementById(`freq${id}`).value = data.freq;
+    document.getElementById(`type${id}`).value = data.type;
+    
+    gainInput.value = data.gain.toFixed(1);
+    gainInput.disabled = true;
+}
+
+function toggleAntenna2() {
+    const isEnabled = document.getElementById('enable2').value === 'true';
+    document.getElementById('controls2').style.display = isEnabled ? 'block' : 'none';
+}
+
+function sinc(x) {
+    return (x === 0) ? 1 : Math.sin(x) / x;
+}
+
+function computeRadiationPattern(w, l, freqGHz, azDeg, elDeg, isVICTS, customGainDB) {
+    const c = 0.29979;
+    const lambda = c / freqGHz;
+    const k = 2 * Math.PI / lambda;
+    
+    let maxGainDB = customGainDB !== null && !isNaN(customGainDB) ? customGainDB : calculateTheoreticalGain(w, l, freqGHz);
+
+    const theta0 = (90 - elDeg) * (Math.PI / 180);
+    const phi0 = azDeg * (Math.PI / 180);
+
+    const res = 100;
+    let gainMap = [], thetaMap = [], phiMap = [];
+    let scanLossDB = 0;
+
+    for (let i = 0; i <= res; i++) {
+        let theta = (i / res) * (Math.PI / 2);
+        let rowGain = [], rowTheta = [], rowPhi = [];
+        
+        for (let j = 0; j <= res; j++) {
+            let phi = (j / res) * 2 * Math.PI;
+            
+            let u = Math.sin(theta) * Math.cos(phi) - Math.sin(theta0) * Math.cos(phi0);
+            let v = Math.sin(theta) * Math.sin(phi) - Math.sin(theta0) * Math.sin(phi0);
+            
+            let AF = sinc(k * w * u / 2) * sinc(k * l * v / 2);
+            let powerLinear = AF * AF;
+            
+            if (!isVICTS) {
+                powerLinear *= Math.cos(theta);
+            }
+            
+            let gainDB = powerLinear > 1e-10 ? maxGainDB + 10 * Math.log10(powerLinear) : maxGainDB - 100;
+            
+            rowGain.push(gainDB);
+            rowTheta.push(theta);
+            rowPhi.push(phi);
+        }
+        gainMap.push(rowGain); thetaMap.push(rowTheta); phiMap.push(rowPhi);
+    }
+    
+    if (!isVICTS) {
+        scanLossDB = 10 * Math.log10(Math.cos(theta0));
+    }
+
+    return { gainMap, thetaMap, phiMap, maxGainDB, actualPeakDB: maxGainDB + scanLossDB };
+}
+
+function mapToXYZ(p, globalMaxDB, dynRange) {
+    let x = [], y = [], z = [];
+    for (let i=0; i<p.gainMap.length; i++) {
+        let rx=[], ry=[], rz=[];
+        for (let j=0; j<p.gainMap[i].length; j++) {
+            let radius = Math.max(p.gainMap[i][j] - (globalMaxDB - dynRange), 0) / dynRange;
+            let theta = p.thetaMap[i][j];
+            let phi = p.phiMap[i][j];
+            rx.push(radius * Math.sin(theta) * Math.cos(phi));
+            ry.push(radius * Math.sin(theta) * Math.sin(phi));
+            rz.push(radius * Math.cos(theta));
+        }
+        x.push(rx); y.push(ry); z.push(rz);
+    }
+    return {x, y, z};
+}
+
+function generateGroundPlane(size, resolution) {
+    let range = size / 2;
+    let x = [], y = [], z = [];
+    let steps = resolution;
+    
+    for (let i = 0; i <= steps; i++) {
+        let rx = [], ry = [], rz = [];
+        let curY = -range + (i / steps) * size;
+        for (let j = 0; j <= steps; j++) {
+            rx.push(-range + (j / steps) * size);
+            ry.push(curY);
+            rz.push(0);
+        }
+        x.push(rx); y.push(ry); z.push(rz);
+    }
+    return {x, y, z};
+}
+
+function generateLowerHemisphere(resolution) {
+    let x = [], y = [], z = [];
+    let steps = resolution;
+    let radius = 1.0; 
+
+    for (let i = 0; i <= steps; i++) {
+        // Upper hemisphere theta is 0 to PI/2, Lower is PI/2 to PI
+        let theta = Math.PI / 2 + (i / steps) * (Math.PI / 2);
+        let rx = [], ry = [], rz = [];
+        for (let j = 0; j <= steps; j++) {
+            let phi = (j / steps) * 2 * Math.PI;
+            rx.push(radius * Math.sin(theta) * Math.cos(phi));
+            ry.push(radius * Math.sin(theta) * Math.sin(phi));
+            rz.push(radius * Math.cos(theta));
+        }
+        x.push(rx); y.push(ry); z.push(rz);
+    }
+    return {x, y, z};
+}
+
+function updatePlot() {
+    const dynRange = 45; 
+
+    const preset1 = document.getElementById('preset1').value;
+    const w1 = parseFloat(document.getElementById('w1').value);
+    const l1 = parseFloat(document.getElementById('l1').value);
+    const freq1 = parseFloat(document.getElementById('freq1').value);
+    const az1 = parseFloat(document.getElementById('az1').value);
+    const el1 = parseFloat(document.getElementById('el1').value);
+    const type1 = document.getElementById('type1').value === 'victs';
+    const gain1 = preset1 === 'custom' ? parseFloat(document.getElementById('gain1').value) : presets[preset1].gain;
+
+    const p1 = computeRadiationPattern(w1, l1, freq1, az1, el1, type1, gain1);
+    let globalMax = p1.maxGainDB;
+    
+    let p2 = null;
+    const enable2 = document.getElementById('enable2').value === 'true';
+    if (enable2) {
+        const preset2 = document.getElementById('preset2').value;
+        const w2 = parseFloat(document.getElementById('w2').value);
+        const l2 = parseFloat(document.getElementById('l2').value);
+        const freq2 = parseFloat(document.getElementById('freq2').value);
+        const az2 = parseFloat(document.getElementById('az2').value);
+        const el2 = parseFloat(document.getElementById('el2').value);
+        const type2 = document.getElementById('type2').value === 'victs';
+        const gain2 = preset2 === 'custom' ? parseFloat(document.getElementById('gain2').value) : presets[preset2].gain;
+
+        p2 = computeRadiationPattern(w2, l2, freq2, az2, el2, type2, gain2);
+        globalMax = Math.max(globalMax, p2.maxGainDB);
+    }
+
+    const coords1 = mapToXYZ(p1, globalMax, dynRange);
+    
+    document.getElementById('metrics1').innerHTML = 
+        `Max Boresight Gain : ${p1.maxGainDB.toFixed(2)} dBi<br>
+         Pointed Active Gain : <span style="color:#007acc">${p1.actualPeakDB.toFixed(2)} dBi</span>`;
+
+    let data = [];
+    
+    // Add reference features (Ground plane and Lower Hemisphere)
+    const ground = generateGroundPlane(2.5, 20); // Normalized scale
+    data.push({
+        type: 'surface',
+        x: ground.x, y: ground.y, z: ground.z,
+        colorscale: [[0, '#333'], [1, '#333']],
+        showscale: false,
+        name: 'Ground Plane',
+        opacity: 0.5,
+        hoverinfo: 'skip'
+    });
+    
+    const lowerSphere = generateLowerHemisphere(30);
+    data.push({
+        type: 'surface',
+        x: lowerSphere.x, y: lowerSphere.y, z: lowerSphere.z,
+        colorscale: [[0, '#222'], [1, '#222']],
+        showscale: false,
+        name: 'Lower Hemisphere',
+        opacity: 0.15,
+        hoverinfo: 'skip'
+    });
+
+    // Add Antenna Patterns
+    data.push({
+        type: 'surface',
+        x: coords1.x, y: coords1.y, z: coords1.z,
+        colorscale: [[0, '#007acc'], [1, '#007acc']],
+        showscale: false,
+        name: 'Antenna 1',
+        opacity: 0.85
+    });
+
+    if (enable2 && p2) {
+        const coords2 = mapToXYZ(p2, globalMax, dynRange);
+        
+        document.getElementById('metrics2').innerHTML = 
+            `Max Boresight Gain : ${p2.maxGainDB.toFixed(2)} dBi<br>
+             Pointed Active Gain : <span style="color:#cc3300">${p2.actualPeakDB.toFixed(2)} dBi</span>`;
+
+        data.push({
+            type: 'surface',
+            x: coords2.x, y: coords2.y, z: coords2.z,
+            colorscale: [[0, '#cc3300'], [1, '#cc3300']],
+            showscale: false,
+            name: 'Antenna 2',
+            opacity: 0.85
+        });
+    }
+
+    const layout = {
+        paper_bgcolor: '#1e1e1e',
+        plot_bgcolor: '#1e1e1e',
+        font: { color: '#e0e0e0' },
+        margin: { l: 0, r: 0, b: 0, t: 30 },
+        scene: {
+            xaxis: { visible: false },
+            yaxis: { visible: false },
+            zaxis: { visible: false },
+            camera: { eye: {x: 1.5, y: 1.5, z: 1.0} },
+            aspectmode: 'cube'
+        }
+    };
+
+    Plotly.newPlot('plot', data, layout, {responsive: true});
+}
+
+applyPreset(1);
+updatePlot();
+</script>
+
+</body>
+</html>
